@@ -1,0 +1,5 @@
+# embDim: [4, 8, 16, 32]
+# winSize: [2,3]
+
+embDim: [16]
+winSize: [2]

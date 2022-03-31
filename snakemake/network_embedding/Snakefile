@@ -1,0 +1,56 @@
+from pathlib import Path
+from glob import glob
+import os
+
+
+
+
+rule all:
+    input:
+    	"input_genewalk/genelist.csv",
+    	directory(expand("~/genewalk/output/2022_01_19_network07_dim{emd_dim}_win{win_size}",
+    		emd_dim=config['embDim'], win_size=config['winSize']))
+
+rule prepare_geneWalk_input:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	#resources: partition="cpu_p", cpus=24, nice=10000, mem="100G", time="48:00:00",  gres="gpu:0"
+	input:
+		file="output_kimono/network_07.tsv"
+	output:
+		network_sif_full="input_genewalk/network_sif_full.sif",
+		genelist="input_genewalk/genelist.csv",
+		directory=directory("input_genewalk")
+	shell:
+		"""
+		Rscript --vanilla ../../code/network_embedding/01_prepare_geneWalkInput.R \
+		-i {input} \
+		-o {output.directory}; cp {output.directory}/go.obo ~/genewalk/resources/.
+		"""
+
+rule geneWalk_vanilla:
+	conda:
+		#"conda-envs/n2v.yml"
+		"conda-envs/genewalk_mod.yml"
+	#resources: partition="cpu_p", cpus=24, nice=10000, mem="100G", time="48:00:00",  gres="gpu:0"
+	input:
+		genelist="input_genewalk/genelist.csv",
+		network_sif_full="input_genewalk/network_sif_full.sif"
+	threads: 40
+	output:
+		project_folder=directory("output/2022_01_19_network07_dim{emd_dim}_win{win_size}")
+	params:
+		emd_dim="{emd_dim}",
+		win_size="{win_size}"
+	shell:
+		"""
+		genewalk --project {output.project_folder} \
+		--stage node_vectors --network_source sif_full \
+		--id_type custom --dim_rep {params.emd_dim}  \
+		--nproc 40 --nreps_graph 100 \
+		--window_size {params.win_size} \
+		--nreps_null 1 --random_seed 22 \
+		--network_file {input.network_sif_full} \
+		--save_dw True --genes  {input.genelist} \
+		--alpha_fdr 1; \
+		"""

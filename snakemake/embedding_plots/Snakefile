@@ -1,0 +1,33 @@
+from pathlib import Path
+from glob import glob
+import os
+
+
+
+
+rule all:
+    input:
+    	"output_dir/plots_emb_ranking_March2022.pdf" 
+
+
+
+
+rule plot_compound_plot:
+	conda:
+		"conda-envs/R_plot_4.0.yml"
+	#resources: partition="cpu_p", cpus=24, nice=10000, mem="100G", time="48:00:00",  gres="gpu:0"
+	input:
+		emb="input_dir/txt/deepwalk_node_vectors_8.txt",
+		most_similar= "data_dir/most_sim.tsv",
+		robust_genes= "data_dir/robust_genes.tsv"
+	output:
+		o_file="output_dir/plots_emb_ranking_March2022.pdf" 
+	shell:
+		"""
+		Rscript --vanilla ../../code/analysis/plot_embedding_geneRanking/01_plot_emb_AND_gene_ranking.R \
+			--most_similar {input.most_similar}  \
+			--robust_genes {input.robust_genes}  \
+			--emb_vec {input.emb} \
+			--outputfile {output.o_file}
+		"""
+

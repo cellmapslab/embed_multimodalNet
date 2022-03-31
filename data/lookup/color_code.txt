@@ -1,0 +1,11 @@
+node_types,node_colors
+gene,#355C7D
+pheno,#F8B195
+como,#C06C84
+prs,#F67280
+cova,#C7CEEA
+tissue,#6C5B7B
+gene_1,#355C7D
+gene_2,#477aa6
+gene_3,#6997bf
+gene_4,#92b4d1

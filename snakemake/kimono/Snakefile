@@ -1,0 +1,138 @@
+from pathlib import Path
+from glob import glob
+import os
+
+
+rule all:
+    input:
+    	expand("results/network_GTex_subset.biogrid_startnode{startnode}.tsv", startnode=config['startnode']),
+    	expand("results/singletissue/Brain/network_GTex_subset.biogrid_SMTS_startnode{startnode}.tsv", startnode=config['startnode']),
+    	"results/full_network_filter.csv",
+    	"results/reverse_models.tsv"
+
+
+
+##############################################################
+# run Kimono
+##############################################################
+
+
+rule runKimono:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	#resources: partition="cpu_p", cpus=24, nice=10000, mem="100G", time="48:00:00",  gres="gpu:0"
+	input:
+		expression = "input/expression_{gene_subset}.csv",
+		phenotypes = "input/phenotypes_{gene_subset}.csv",
+		prs = "input/prs_{gene_subset}.csv",
+		como = "input/como_{gene_subset}.csv",
+		prior_expr_bio = "input/prior_expr_pheno_{gene_subset}.csv",
+		prior_expr_prs = "input/prior_expr_prs_{gene_subset}.csv",
+		prior_expr_como = "input/prior_expr_como_{gene_subset}.csv",
+		prior_expr="input/prior_expression_{gene_subset}.csv"
+	log:
+		"logs/runKimono_{gene_subset}_startnode{startnode}.job"
+	params:
+		startnode="{startnode}"
+	threads: 12
+	output:
+		file="results/network_GTex_subset.{gene_subset}_startnode{startnode}.tsv"
+	shell:
+		"""
+		Rscript --vanilla code/01_runKimono.R -startnode {params.startnode} \
+		-expr {input.expression} \
+		-pheno {input.phenotypes} \
+		-como {input.como} \
+		-prs {input.prs} \
+		-pr_pheno {input.prior_expr_bio} \
+		-pr_prs {input.prior_expr_prs} \
+		-pr_como {input.prior_expr_como} \
+		-pr_expr {input.prior_expr} -o {output.file}
+		"""
+
+
+rule merge_nets_one_file:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	#resources: partition="cpu_p", cpus=24, nice=10000, mem="100G", time="48:00:00",  gres="gpu:0"
+	input:
+		"results"
+	output:
+		file="results/full_network_filter.csv"
+	shell:
+		"""
+		Rscript --vanilla ../../code/kimono/02_merge_nets_one_file.R \
+		-i {input}
+		"""
+
+rule runKimono_dc:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	input:
+		expression = "input/expression_biogrid.csv",
+		phenotypes = "input/phenotypes_biogrid.csv",
+		prs = "input/prs_biogrid.csv",
+		como = "input/como_biogrid.csv",
+		network = "results/full_network_filter.csv"
+	threads: 12
+	output:
+		file="results/reverse_models.tsv"
+	shell:
+		"""
+		Rscript --vanilla code/01_runKimono_reverse.R \
+		-expr {input.expression} \
+		-pheno {input.phenotypes} \
+		-como {input.como} \
+		-prs {input.prs} \
+		-network {input.network} \
+		 -o {output.file}
+		"""
+##############################################################
+# run Kimono - singletissue
+##############################################################
+
+
+rule runKimono_singletissue:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	input:
+		expression = "input/singletissue/expr_{gene_subset}_{tissue}_{spectissue}.csv",
+		phenotypes = "input/singletissue/pheno_{gene_subset}_{tissue}_{spectissue}.csv",
+		prs = "input/singletissue/prs_{gene_subset}_{tissue}_{spectissue}.csv",
+		como = "input/singletissue/como_{gene_subset}_{tissue}_{spectissue}.csv",
+		prior_expr_bio = "input/prior_expr_pheno_{gene_subset}.csv",
+		prior_expr_prs = "input/prior_expr_prs_{gene_subset}.csv",
+		prior_expr_como = "input/prior_expr_como_{gene_subset}.csv",
+		prior_expr="input/prior_expression_{gene_subset}.csv"
+	params:
+		startnode="{startnode}"
+	threads: 12
+	output:
+		file="results/singletissue/{spectissue}/network_GTex_subset.{gene_subset}_{tissue}_startnode{startnode}.tsv"
+	shell:
+		"""
+		Rscript --vanilla code/01_runKimono.R -startnode {params.startnode} \
+		-expr {input.expression} \
+		-pheno {input.phenotypes} \
+		-como {input.como} \
+		-prs {input.prs} \
+		-pr_pheno {input.prior_expr_bio} \
+		-pr_prs {input.prior_expr_prs} \
+		-pr_como {input.prior_expr_como} \
+		-pr_expr {input.prior_expr} -o {output.file}
+		"""
+
+rule merge_nets_one_file_singletissue:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	#resources: partition="cpu_p", cpus=24, nice=10000, mem="100G", time="48:00:00",  gres="gpu:0"
+	input:
+		"results/singletissue/{spectissue}"
+	output:
+		file="results/singletissue/{spectissue}/full_network_filter.csv"
+	shell:
+		"""
+		Rscript --vanilla ../../code/kimono/02_merge_nets_one_file.R \
+		-i {input}
+		"""
+

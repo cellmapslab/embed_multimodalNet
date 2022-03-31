@@ -1,0 +1,118 @@
+from pathlib import Path
+from glob import glob
+import os
+
+
+gw1 = glob_wildcards("../data/outputKimono/alltissues/{alltissue}.txt")
+
+
+
+rule all:
+    input:
+    	"results/phenotypes_biogrid.csv",
+    	"results/expression_biogrid.csv",
+    	"results/como_biogrid.csv",
+    	"results/prior_expr_pheno_biogrid.csv",
+    	"results/prior_expr_prs_biogrid.csv",
+    	"results/prior_expr_como_biogrid.csv",
+    	"results/prior_expression_biogrid.csv",
+    	"results/sample_attributes_biogrid.csv",
+    	"results/singletissue/expr_biogrid_SMTS_Brain.csv"
+##############################################################
+# prepare data
+##############################################################
+
+
+
+rule preprocessdata:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	resources: partition="cpu_p", cpus=4, nice=10000, mem="100G", time="02:00:00",  gres="gpu:0"
+	input:
+		expr="scratch/data/2019_GTEx_v8/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct",
+		annotation="scratch/data/2019_GTEx_v8/gencode.v26.GRCh38.genes.csv"
+	output:
+		"scratch/data/2019_GTEx_v8/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm_filtered.csv"
+	shell:
+		"""
+		Rscript --vanilla code/preprocessing/preprocess/01_preprocess_expr.R \
+		-expr {input.expr} -anno {input.annotation} -o {output}
+		"""
+
+
+rule get_pheno_expr:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	resources: partition="cpu_p", cpus=4, nice=10000, mem="100G", time="00:30:00",  gres="gpu:0"
+	output:
+		pheno="../../data/phenotypes/subsetPhenotypes.csv"
+	shell:
+		"""
+		Rscript --vanilla code/preprocessing/extended_phenotypes/02_subsetPhenotypes2.R
+		"""
+
+rule create_kimonoData3:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	resources: partition="cpu_p", cpus=4, nice=10000, mem="100G", time="00:30:00",  gres="gpu:0"
+	log:
+		"logs/get_data/create_kimonoData_{gene_subset}.log"
+	input:
+		pheno="../../data/phenotypes/subsetPhenotypes.csv",
+		raw_expr= "scratch/data/2019_GTEx_v8/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm_filtered.csv"
+	output:
+		expr="results/expression_{gene_subset}.csv",
+		pheno="results/phenotypes_{gene_subset}.csv",
+		como="results/como_{gene_subset}.csv",
+		prior_expr_pheno="results/prior_expr_pheno_{gene_subset}.csv",
+		prior_expr_prs="results/prior_expr_prs_{gene_subset}.csv",
+		prior_expr_como="results/prior_expr_como_{gene_subset}.csv",
+		sample_attributes="results/sample_attributes_{gene_subset}.csv"
+	shell:
+		"""
+		Rscript --vanilla code/preprocessing/get_Kimono_data/01_create_Kimono_data3.R \
+		-s {wildcards.gene_subset} -o results/
+		"""
+
+
+
+rule create_kimonoMapping:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	resources: partition="cpu_p", cpus=4, nice=10000, mem="5G", time="00:30:00",  gres="gpu:0"
+	input:
+		"../../../data/phenotypes/input/biogrid.RData"
+	output:
+		"results/prior_expression_biogrid.csv"
+	shell:
+		"""
+		Rscript --vanilla code/preprocessing/get_Kimono_data/02_create_expr_mapping.R \
+		-i {input} \
+		-o results/
+		"""
+
+
+rule create_data_singletissues:
+	conda:
+		"conda-envs/R_Kimono.yml"
+	resources: partition="cpu_p", cpus=4, nice=10000, mem="5G", time="00:30:00",  gres="gpu:0"
+	input:
+		expression = "results/expression_biogrid.csv",
+		como = "results/como_biogrid.csv",
+		prs = "results/prs_biogrid.csv",
+		phenotypes = "results/phenotypes_biogrid.csv"
+	output:
+		"results/singletissue/expr_{gene_subset}_{tissue}_{spectissue}.csv",
+		"results/singletissue/como_{gene_subset}_{tissue}_{spectissue}.csv",
+		"results/singletissue/prs_{gene_subset}_{tissue}_{spectissue}.csv",
+		"results/singletissue/pheno_{gene_subset}_{tissue}_{spectissue}.csv"
+	shell:
+		"""
+		Rscript --vanilla code/preprocessing/get_Kimono_data/03_extract_tissues_for_kimono2.R \
+		-expr {input.expression} \
+		-como {input.como} \
+		-prs {input.prs} \
+		-pheno {input.phenotypes} \
+		-o ./results/singletissue/
+		"""
+

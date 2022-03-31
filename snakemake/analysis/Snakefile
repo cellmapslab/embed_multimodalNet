@@ -1,0 +1,68 @@
+from pathlib import Path
+from glob import glob
+import os
+
+
+
+
+rule all:
+    input:
+    	"output_dir/most_sim.tsv",
+    	"input_dir/txt/deepwalk_node_vectors_8.txt",
+    	"output_dir/mean_sim_var.tsv" 
+
+
+
+rule get_robust_genes:
+	conda:
+		"conda-envs/R_knitr.yml"
+	input:
+		node_anno= "../../../data/lookup/node_anno.txt",
+		raw_data= "output_dir/most_sim.tsv"
+	output:
+		#o_file="output_dir/robust_genes.tsv" 
+		#o_file="../../../data/embedding/mean_sim_top1000_covid/mean_sim_rest_gene.tsv" 
+		o_file="output_dir/mean_sim_var.tsv" 
+
+	shell:
+		"""
+		Rscript --vanilla ../../code/analysis/preparation/04_get_robust_genes.R \
+			--node_anno {input.node_anno}  \
+			--raw_data {input.raw_data}  \
+			--outputfile {output.o_file}
+		"""
+
+
+
+rule get_top_most_similar:
+	conda:
+		"conda-envs/n2v.yml"
+	threads: 40
+	input:
+		"input_dir"
+	output:
+		"output_dir/most_sim.tsv"
+	shell:
+		"""
+		python ../../code/analysis/preparation/03_most_similar.py --proj_folder {input} \
+		--traitlist ../../../data/lookup/genelist.csv \
+		--output {output}
+		"""
+
+
+rule get_txt_embedding:
+	conda:
+		"conda-envs/n2v.yml"
+	#resources: partition="cpu_p", cpus=24, nice=10000, mem="100G", time="48:00:00",  gres="gpu:0"
+	input:
+		"input_dir"
+	output:
+		o_dir=directory("input_dir/txt"),
+		o_file="input_dir/txt/deepwalk_node_vectors_8.txt" 
+	shell:
+		"""
+		python ../../code/analysis/preparation/01_save_pkl_as_txt.py --proj_folder {input} \
+		--out_folder {output.o_dir}
+		"""
+
+
